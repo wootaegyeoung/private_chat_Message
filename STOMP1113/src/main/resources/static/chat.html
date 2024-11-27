@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>채팅방</title>
+    <meta charset="UTF-8">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.0/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 0;
+            background-color: #f9f9f9;
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        #chatArea {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: #fff;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        #chatMessage {
+            width: calc(100% - 100px); /* 전송 버튼의 폭을 뺀 나머지 영역 */
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            background-color: #28a745;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+    </style>
+</head>
+<body>
+<h1>채팅방: <span id="currentRoomName"></span></h1>
+<div id="chatArea"></div>
+<input type="text" id="chatMessage" placeholder="메시지 입력..." />
+<button onclick="sendMessage()">전송</button>
+<button onclick="leaveChatRoom()">채팅방 나가기</button>
+
+<script>
+    let stompClient = null;
+    let userName = '';
+    let currentRoom = '';
+
+    function getQueryParams() {
+        const params = new URLSearchParams(window.location.search);
+        return {
+            room: params.get('room'),
+            user: params.get('user')
+        };
+    }
+
+    function connect() {
+        const socket = new SockJS('/gs-guide-websocket');
+        stompClient = Stomp.over(socket);
+        stompClient.connect({}, function (frame) {
+            console.log('연결됨: ' + frame);
+            stompClient.subscribe(`/topic/${currentRoom}`, function (message) {
+                const chatMessage = JSON.parse(message.body);
+                displayMessage(chatMessage);
+            });
+        });
+    }
+
+    function sendMessage() {
+        const chatMessage = document.getElementById("chatMessage").value;
+        console.log("현재 채팅방: " + currentRoom);
+        if (chatMessage) {
+            const message = {
+                user: userName,
+                content: chatMessage,
+                timestamp: new Date().toLocaleString(),
+
+            };
+            // URL 경로에 roomName을 포함하여 메시지 전송
+            stompClient.send(`/app/chat/${currentRoom}`, {}, JSON.stringify(message));
+            document.getElementById("chatMessage").value = ''; // 입력 필드 초기화
+        }
+    }
+
+
+
+    function leaveChatRoom() {
+        if (currentRoom) {
+            stompClient.unsubscribe(currentRoom);
+            window.location.href = "index.html"; // 메인 페이지로 이동
+        }
+    }
+
+    function displayMessage(chatMessage) {
+        const messageElement = document.createElement('div');
+        messageElement.innerText = `${chatMessage.user} (${chatMessage.timestamp}): ${chatMessage.content}`;
+        document.getElementById("chatArea").appendChild(messageElement);
+        document.getElementById("chatArea").scrollTop = document.getElementById("chatArea").scrollHeight; // 스크롤 조정
+    }
+
+    // 페이지 로드 시 초기화
+    window.onload = function() {
+        const params = getQueryParams();
+        currentRoom = params.room;
+        userName = params.user;
+
+        document.getElementById("currentRoomName").innerText = currentRoom; // 현재 채팅방 이름 표시
+        connect(); // WebSocket 연결
+
+        // 기존 메시지 로드
+        fetch(`/chat/${currentRoom}/messages`)
+            .then(response => response.json())
+            .then(messages => {
+                messages.forEach(msg => displayMessage(msg)); // 과거 메시지 표시
+            });
+    };
+</script>
+</body>
+</html>

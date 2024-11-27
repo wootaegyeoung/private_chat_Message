@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>채팅 애플리케이션</title>
+    <meta charset="UTF-8">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.0/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 0;
+            background-color: #f9f9f9;
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        #chatRooms { margin-top: 20px; }
+        .chat-room { border: 1px solid #ccc; margin-bottom: 10px; padding: 10px; cursor: pointer; }
+        .chat-room:hover { background-color: #f0f0f0; }
+    </style>
+</head>
+<body>
+<h1>채팅 애플리케이션</h1>
+<div id="userNamePrompt">
+    <label for="userName">이름을 입력하세요:</label>
+    <input type="text" id="userName" />
+    <button onclick="setUserName()">확인</button>
+</div>
+
+<div id="chatRooms" style="display:none;">
+    <h2>채팅방 생성</h2>
+    <input type="text" id="roomName" placeholder="채팅방 이름" />
+    <button onclick="createChatRoom()">생성</button>
+
+    <h2>생성된 채팅방</h2>
+    <div id="roomList"></div>
+</div>
+
+<script>
+    let stompClient = null;
+    let userName = '';
+
+    function setUserName() {
+        userName = document.getElementById("userName").value;
+        if (userName) {
+            document.getElementById("userNamePrompt").style.display = "none";
+            document.getElementById("chatRooms").style.display = "block";
+            connect();
+        } else {
+            alert("이름을 입력하세요.");
+        }
+    }
+
+    function connect() {
+        const socket = new SockJS('/gs-guide-websocket');
+        stompClient = Stomp.over(socket);
+        stompClient.connect({}, function (frame) {
+            console.log('연결됨: ' + frame);
+
+            // 다른 클라이언트에 의해 생성된 채팅방을 수신
+            stompClient.subscribe('/queue/chat-rooms', function (chatRoom) {
+                const room = JSON.parse(chatRoom.body);
+                addRoomToList(room);
+            });
+
+            // 초기 채팅방 목록 가져오기
+            fetch('/chat/rooms')
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(room => addRoomToList(room));
+                });
+        });
+    }
+
+    function createChatRoom() {
+        const roomName = document.getElementById("roomName").value;
+        if (roomName) {
+            const chatRoom = { roomName: roomName };
+            stompClient.send("/app/createRoom", {}, JSON.stringify(chatRoom)); // 서버에 채팅방 생성 요청
+            document.getElementById("roomName").value = ''; // 입력 필드 초기화
+        } else {
+            alert("채팅방 이름을 입력하세요.");
+        }
+    }
+
+    function addRoomToList(room) {
+        const roomList = document.getElementById("roomList");
+        const roomElement = document.createElement('div');
+        roomElement.className = 'chat-room';
+        roomElement.innerText = room.roomName;
+        roomElement.onclick = function() {
+            joinChatRoom(room.roomName);
+        };
+        roomList.appendChild(roomElement);
+    }
+
+    function joinChatRoom(roomName) {
+        // 채팅방 페이지로 이동
+        window.location.href = `chat.html?room=${roomName}&user=${encodeURIComponent(userName)}`;
+    }
+</script>
+</body>
+</html>
