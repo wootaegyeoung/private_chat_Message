@@ -1,7 +1,7 @@
 # private_chat_Message
 for Linkverse moim project, i can 
 
-## STOMP1113 : 
+## STOMP1113(11월 27일) : 
 1. 웹소캣 할당
 2. 채팅방 생성.
 3. 채팅방 기반 메세징
